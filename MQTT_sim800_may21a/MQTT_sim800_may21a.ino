@@ -1,5 +1,11 @@
 #include <SoftwareSerial.h>
 #include "DHT.h"
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+
+LiquidCrystal_I2C lcd(0x27,16,2);  // set the LCD address to 0x27 for a 16 chars and 2 line display
+
+
 SoftwareSerial SIM800(2, 3);        // для новых плат начиная с версии RX,TX
 // #include <DallasTemperature.h>      // подключаем библиотеку чтения датчиков температуры
 // OneWire oneWire(4);                 // и настраиваем  пин 4 как шину подключения датчиков DS18B20
@@ -8,7 +14,7 @@ SoftwareSerial SIM800(2, 3);        // для новых плат начиная
 
 #define LED_Pin      13                     // на светодиод (моргалку)
 #define DHTPIN 8 // номер пина, к которому подсоединен датчик
-#define BUZ_Pin 9 // buzzer   
+#define BUZ_Pin 9 // buzzer 1  
 
 
 // Инициируем датчик
@@ -60,6 +66,11 @@ void setup() {
   Serial.println("MQTT | 21/05/2018"); 
   delay (1000);
   SIM800_reset();
+
+  lcd.init();                      // initialize the lcd 
+  lcd.backlight();
+  lcd.setCursor(0,0);
+  lcd.print("MQTT  21/05/2018");
  
               }
 
@@ -107,6 +118,8 @@ void detection(){                                                 // услов�
   h = dht.readHumidity();  
   t = dht.readTemperature();
 Serial.println((String)"Влажность: "+h+" %\t"+"Температура: "+t+" *C ");
+  lcd.setCursor(0,1);
+  lcd.println((String)"Temp:"+t+" Hum:"+h);
     interval--;
     if (interval <1) { interval = 6; 
         if (broker == true) { SIM800.println("AT+CIPSEND"), delay (200);  
