@@ -97,7 +97,7 @@ if((ledState1 == HIGH) && (currentMillis - previousMillis1 >= OnTime1))
  }
  else if ((ledState1 == LOW) && (currentMillis - previousMillis1 >= OffTime1))
  {
-   ledState1 = HIGH; // выключаем
+   ledState1 = HIGH; // включаем
    previousMillis1 = currentMillis ; // запоминаем момент времени
    digitalWrite(LED_Pin, ledState1); // реализуем новое состояние
  }
@@ -119,7 +119,9 @@ void detection(){                                                 // услов�
   t = dht.readTemperature();
 Serial.println((String)"Влажность: "+h+" %\t"+"Температура: "+t+" *C ");
   lcd.setCursor(0,1);
-  lcd.println((String)"Temp:"+t+" Hum:"+h);
+  lcd.println((String)"T:"+t+" H:"+h+Security);
+  lcd.setCursor(7,1);
+  lcd.write(223);
     interval--;
     if (interval <1) { interval = 6; 
         if (broker == true) { SIM800.println("AT+CIPSEND"), delay (200);  
