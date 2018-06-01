@@ -2,9 +2,12 @@
 #include "DHT.h"
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
+#include "MFRC522_I2C.h"
 
 LiquidCrystal_I2C lcd(0x27,16,2);  // set the LCD address to 0x27 for a 16 chars and 2 line display
 
+MFRC522 rfid(0x28, 20);  // Create MFRC522 instance. pin 13 reset - not used
+MFRC522::MIFARE_Key key; 
 
 SoftwareSerial SIM800(2, 3);        // для новых плат начиная с версии RX,TX
 // #include <DallasTemperature.h>      // подключаем библиотеку чтения датчиков температуры
@@ -51,6 +54,9 @@ unsigned long previousMillis1 = 0;
 long OnTime1 = 50; // длительность свечения светодиода (в миллисекундах)
 long OffTime1 = 950; // светодиод не горит (в миллисекундах)
 
+int code[] = {69,114,30,83}; //This is the stored UID
+int codeRead = 0;
+
 void setup() {
  // pinMode(RESET_Pin, OUTPUT);             // указываем пин на выход для перезагрузки модема
   pinMode(LED_Pin,     OUTPUT);             // указываем пин на выход (светодиод)
@@ -71,6 +77,8 @@ void setup() {
   lcd.backlight();
   lcd.setCursor(0,0);
   lcd.print("MQTT  21/05/2018");
+  
+  rfid.PCD_Init(); // Init MFRC522 
  
               }
 
@@ -83,6 +91,10 @@ if (Serial.available())  resp_serial();                                 // ес�
 if (millis()> Time1 + 10000) Time1 = millis(), detection();               // выполняем функцию detection () каждые 10 сек 
 if (Security) blink();
 
+  if(  rfid.PICC_IsNewCardPresent())
+  {
+      readRFID();
+  }
 }
 
 void blink()
@@ -119,7 +131,7 @@ void detection(){                                                 // услов�
   t = dht.readTemperature();
 Serial.println((String)"Влажность: "+h+" %\t"+"Температура: "+t+" *C ");
   lcd.setCursor(0,1);
-  lcd.println((String)"T:"+t+" H:"+h+Security);
+  lcd.print((String)"T:"+t+" H:"+h);
   lcd.setCursor(7,1);
   lcd.write(223);
     interval--;
@@ -209,12 +221,14 @@ void resp_modem (){     //------------------ АНЛИЗИРУЕМ БУФЕР В�
  
    } else if (at.indexOf("C5/comandlock1",4) > -1 )      {Security = 1 ;        // команда постановки на охрану       
                                                           tone (BUZ_Pin, 4000, 100);
+                                                          lcd.noBacklight();
    
    } else if (at.indexOf("C5/comandlock0",4) > -1 )      {Security = 0 ;        // команда снятия с хораны
 
                                                            tone (BUZ_Pin, 4000, 100);
                                                            delay (200);
                                                            tone (BUZ_Pin, 4000, 100);
+                                                           lcd.backlight();
    } else if (at.indexOf("C5/settimer",4) > -1 )         {Timer = at.substring(at.indexOf("")+15, at.indexOf("")+18).toInt();
 //   } else if (at.indexOf("C5/comandstop",4) > -1 )       {heatingstop();     // команда остановки прогрева
 //   } else if (at.indexOf("C5/comandstart",4) > -1 )      {enginestart();    // команда запуска прогрева
@@ -243,4 +257,88 @@ void resp_modem (){     //------------------ АНЛИЗИРУЕМ БУФЕР В�
                                     }else Voice(8); } */    
                                
  } 
+
+ void readRFID()
+{
+  
+  rfid.PICC_ReadCardSerial();
+  Serial.print(F("\nPICC type: "));
+  MFRC522::PICC_Type piccType = rfid.PICC_GetType(rfid.uid.sak);
+  Serial.println(rfid.PICC_GetTypeName(piccType));
+ 
+  // Check is the PICC of Classic MIFARE type
+  if (piccType != MFRC522::PICC_TYPE_MIFARE_MINI &&  
+    piccType != MFRC522::PICC_TYPE_MIFARE_1K &&
+    piccType != MFRC522::PICC_TYPE_MIFARE_4K) {
+    Serial.println(F("Your tag is not of type MIFARE Classic."));
+    return;
+  }
+ 
+    Serial.println("Scanned PICC's UID:");
+    printHex(rfid.uid.uidByte, rfid.uid.size);
+ 
+ 
+    int i = 0;
+    boolean match = true;
+    while(i<rfid.uid.size)
+    {
+      if(!(rfid.uid.uidByte[i] == code[i]))
+      {
+           match = false;
+      }
+      i++;
+    }
+ 
+    if(match)
+    {
+      Serial.println("\nI know this card!");
+      if (Security)
+      {
+        Security = 0;
+        tone (BUZ_Pin, 4000, 100);
+        delay (200);
+        tone (BUZ_Pin, 4000, 100);
+        lcd.backlight();
+      }else
+      {
+        Security = 1;
+        tone (BUZ_Pin, 4000, 100);
+        delay (300);
+        lcd.noBacklight();
+      }
+      
+
+    }else
+    {
+      Serial.println("\nUnknown Card");
+    }
+ 
+ 
+    // Halt PICC
+  rfid.PICC_HaltA();
+ 
+  // Stop encryption on PCD
+  rfid.PCD_StopCrypto1();
+}
+ 
+/**
+ * Helper routine to dump a byte array as hex values to Serial. 
+ */
+void printHex(byte *buffer, byte bufferSize) {
+  for (byte i = 0; i < bufferSize; i++) {
+    Serial.print(buffer[i] < 0x10 ? " 0" : " ");
+    Serial.print(buffer[i], HEX);
+  }
+}
+
+/**
+ * Helper routine to dump a byte array as dec values to Serial.
+ */
+void printDec(byte *buffer, byte bufferSize) {
+  for (byte i = 0; i < bufferSize; i++) {
+    Serial.print(buffer[i] < 0x10 ? " 0" : " ");
+    Serial.print(buffer[i], DEC);
+  }
+}
+ 
 
