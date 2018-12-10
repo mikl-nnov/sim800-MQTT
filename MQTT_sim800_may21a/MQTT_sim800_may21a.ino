@@ -3,21 +3,24 @@
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 #include "MFRC522_I2C.h"
+#include <OneWire.h>
+#include <DallasTemperature.h> 
 
 LiquidCrystal_I2C lcd(0x27,16,2);  // set the LCD address to 0x27 for a 16 chars and 2 line display
 
 MFRC522 rfid(0x28, 20);  // Create MFRC522 instance. pin 13 reset - not used
 MFRC522::MIFARE_Key key; 
 
-SoftwareSerial SIM800(2, 3);        // для новых плат начиная с версии RX,TX
-// #include <DallasTemperature.h>      // подключаем библиотеку чтения датчиков температуры
-// OneWire oneWire(4);                 // и настраиваем  пин 4 как шину подключения датчиков DS18B20
-// DallasTemperature sensors(&oneWire);
+SoftwareSerial SIM800(2, 3);        
+     // подключаем библиотеку чтения датчиков температуры
+OneWire oneWire(7);                 // и настраиваем  пин 7 как шину подключения датчиков DS18B20
+ DallasTemperature sensors(&oneWire);
 /*  ----------------------------------------- НАЗНАЧАЕМ ВЫВОДЫ АРДУИНО НА РАЗЛИЧНЫЕ НАПРАВЛЕНИЯ------------------------------   */
 
 #define LED_Pin      13                     // на светодиод (моргалку)
 #define DHTPIN 8 // номер пина, к которому подсоединен датчик
 #define BUZ_Pin 9 // buzzer 1  
+
 
 
 // Инициируем датчик
@@ -41,6 +44,7 @@ String PASS = "";                        // пароль доступа выхо
 /*  ----------------------------------------- ДАЛЕЕ НЕ ТРОГАЕМ ---------------------------------------------------------------   */
 String pin = "";
 unsigned long Time1, Time2 = 0;
+float TempDS[11];
 float t,h;
 int Timer, inDS, count = 0;
 int interval = 3;                           // интервал тправки данных на сервер после загрузки ардуино
@@ -63,6 +67,7 @@ void setup() {
   pinMode(BUZ_Pin,     OUTPUT);
   delay(100); 
   dht.begin();
+  sensors.begin();
   Serial.begin(19200);                       //скорость порта
 //  Serial.setTimeout(50);
   
@@ -79,6 +84,7 @@ void setup() {
   lcd.print("MQTT  21/05/2018");
   
   rfid.PCD_Init(); // Init MFRC522 
+  
  
               }
 
@@ -127,8 +133,24 @@ void callback(){                                                  // обрат�
 void detection(){                                                 // условия проверяемые каждые 10 сек  
 
     Serial.print("Интервал: "), Serial.println(interval);
+    inDS = 0;
+    sensors.requestTemperatures();                                // читаем температуру с трех датчиков
+    while (inDS < 10){
+          TempDS[inDS] = sensors.getTempCByIndex(inDS);           // читаем температуру
+      if (TempDS[inDS] == -127.00){TempDS[inDS]= 80;
+                                   break; }                       // пока не доберемся до неподключенного датчика
+              inDS++;} 
+              
+    for (int i=0; i < inDS; i++) Serial.print("Temp"), Serial.print(i), Serial.print("= "), Serial.println(TempDS[i]); 
+    
+  lcd.setCursor(0,0);
+  lcd.print((String)"t1:"+TempDS[0]+" t2:"+TempDS[1]);
+    
+
+  
   h = dht.readHumidity();  
   t = dht.readTemperature();
+  
 Serial.println((String)"Влажность: "+h+" %\t"+"Температура: "+t+" *C ");
   lcd.setCursor(0,1);
   lcd.print((String)"T:"+t+" H:"+h);
@@ -139,8 +161,8 @@ Serial.println((String)"Влажность: "+h+" %\t"+"Температура: 
         if (broker == true) { SIM800.println("AT+CIPSEND"), delay (200);  
                               MQTT_FloatPub ("C5/ds0",      t,2);
                               MQTT_FloatPub ("C5/ds1",      h,2);
-                      //      MQTT_FloatPub ("C5/ds2",      TempDS[2],2);
-                      //      MQTT_FloatPub ("C5/ds3",      TempDS[3],2);
+                            MQTT_FloatPub ("C5/ds2",      TempDS[0],2);
+                            MQTT_FloatPub ("C5/ds3",      TempDS[1],2);
                       //        MQTT_FloatPub ("C5/vbat",     Vbat,2);
                               MQTT_FloatPub ("C5/timer",    Timer,0);
                               MQTT_PUB      ("C5/security", Security ? "lock1" : "lock0");
@@ -236,8 +258,8 @@ void resp_modem (){     //------------------ АНЛИЗИРУЕМ БУФЕР В�
                                                           SIM800.println("AT+CIPSEND"), delay (200);  
                                                           MQTT_FloatPub ("C5/ds0",      t,2);
                                                           MQTT_FloatPub ("C5/ds1",      h,2);
-                                                    //      MQTT_FloatPub ("C5/ds2",      TempDS[2],2);
-                                                    //      MQTT_FloatPub ("C5/ds3",      TempDS[3],2);
+                                                          MQTT_FloatPub ("C5/ds2",      TempDS[0],2);
+                                                          MQTT_FloatPub ("C5/ds3",      TempDS[1],2);
                                                     //      MQTT_FloatPub ("C5/vbat",     Vbat,2);
                                                           MQTT_FloatPub ("C5/timer",    Timer,0);
                                                           MQTT_PUB      ("C5/security", Security ? "lock1" : "lock0");
